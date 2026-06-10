@@ -7,6 +7,7 @@ import {
   useListOperators,
 } from "@workspace/api-client-react";
 import { calcProductEfficiency, currentWeekStart } from "@/lib/efficiency";
+import { exportDashboardPdf, exportDashboardXlsx } from "@/lib/dashboard-export";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +29,7 @@ import {
   CalendarDays,
   Search,
   X,
+  Download,
 } from "lucide-react";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -463,6 +465,7 @@ export default function AdminDashboard() {
   const [selectedDate, setSelectedDate] = useState<string>(today);
   const [operatorSearch, setOperatorSearch] = useState("");
   const [productSearch, setProductSearch] = useState("");
+  const [exporting, setExporting] = useState<"pdf" | "xlsx" | null>(null);
 
   const isToday = selectedDate === today;
 
@@ -605,6 +608,39 @@ export default function AdminDashboard() {
     });
   }, [step99Reports, selectedDate, productStats.data]);
 
+  async function handleExport(format: "pdf" | "xlsx") {
+    if (exporting) return;
+    setExporting(format);
+    try {
+      const weekStart = currentWeekStart();
+      const exportData = {
+        weekStart,
+        totalOperators: summary.data?.totalOperators ?? 0,
+        totalProducts: summary.data?.totalProducts ?? 0,
+        totalQuantityCompleted: summary.data?.totalQuantityCompleted ?? 0,
+        totalTimeMinutes: summary.data?.totalTimeMinutes ?? 0,
+        avgEfficiency,
+        products: (productStats.data ?? []).map((p) => ({
+          productName: p.productName,
+          totalQuantityCompleted: p.totalQuantityCompleted,
+          allTimeEfficiency: productAllTimeEfficiency.get(p.productId) ?? null,
+          weekEfficiency: productWeekEfficiency.get(p.productId) ?? null,
+        })),
+        operators: (operatorStats.data ?? []).map((op) => ({
+          operatorName: op.operatorName,
+          employeeId: op.employeeId,
+          totalQuantityCompleted: op.totalQuantityCompleted,
+          totalReports: op.totalReports,
+          efficiency: operatorEfficiency.get(op.operatorId) ?? null,
+        })),
+      };
+      if (format === "pdf") await exportDashboardPdf(exportData);
+      else await exportDashboardXlsx(exportData);
+    } finally {
+      setExporting(null);
+    }
+  }
+
   const totalHours = summary.data ? (summary.data.totalTimeMinutes / 60).toFixed(1) : "—";
   const effLabel = avgEfficiency !== null ? `${Math.round(avgEfficiency)}%` : "—";
   const effSub =
@@ -618,12 +654,36 @@ export default function AdminDashboard() {
 
   return (
     <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-          <LayoutDashboard className="w-5 h-5 text-primary" />
-          Dashboard
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">Production overview and activity</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
+            <LayoutDashboard className="w-5 h-5 text-primary" />
+            Dashboard
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">Production overview and activity</p>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs gap-1.5"
+            onClick={() => handleExport("xlsx")}
+            disabled={!!exporting || summary.isLoading || operatorStats.isLoading || productStats.isLoading}
+          >
+            <Download className="w-3.5 h-3.5" />
+            {exporting === "xlsx" ? "Exporting…" : "Export Excel"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs gap-1.5"
+            onClick={() => handleExport("pdf")}
+            disabled={!!exporting || summary.isLoading || operatorStats.isLoading || productStats.isLoading}
+          >
+            <Download className="w-3.5 h-3.5" />
+            {exporting === "pdf" ? "Exporting…" : "Export PDF"}
+          </Button>
+        </div>
       </div>
 
       {/* Stat cards */}
