@@ -78,7 +78,13 @@ function useStepStats(productId: number, stepIds: number[]): Map<number, StepSta
         continue;
       }
       const totalUnits = stepReports.reduce((s, r) => s + (r.quantityCompleted ?? 0), 0);
-      const totalActual = stepReports.reduce((s, r) => s + Number(r.timeWorkedMinutes ?? 0), 0);
+      const isStep99 = stepReports[0]?.step?.stepNumber === 99;
+      // For step 99 reports the lineleader logs wall-clock time for a team, so
+      // multiply by operatorCount to get person-minutes before averaging per piece.
+      const totalActual = stepReports.reduce((s, r) => {
+        const t = Number(r.timeWorkedMinutes ?? 0);
+        return s + (isStep99 ? t * Math.max(1, Number(r.operatorCount ?? 1)) : t);
+      }, 0);
       const totalExpected = stepReports.reduce(
         (s, r) => s + calcStepExpected(
           Number(r.step?.standardTimeMinutes ?? 0),
