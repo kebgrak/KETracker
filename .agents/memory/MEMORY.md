@@ -1,0 +1,3 @@
+- [Lineleader role & step 99](lineleader-step99.md) — operators can be isLineleader; step 99 auto-generated per product as sum of root step times; all dashboard stats scoped to step 99 reports only.
+- [Product revision field & duplicate](product-revision-duplicate.md) — products have a `revision` text column (nullable, max 10 chars); POST /products/:id/duplicate clones product + all steps; codegen re-run after any openapi.yaml change.
+- [standardTimeMinutes unit](standard-time-unit.md) — stored in SECONDS despite field name; always divide by 60 before comparing to timeWorkedMinutes (minutes).

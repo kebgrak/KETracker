@@ -1,0 +1,835 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: Production work reporting API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: operators
+    description: Operator management
+  - name: products
+    description: Product and flowchart management
+  - name: steps
+    description: Production step management
+  - name: reports
+    description: Work report entries
+  - name: summary
+    description: Dashboard summaries
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  # ── Operators ──────────────────────────────────────────────────────────────
+  /operators:
+    get:
+      operationId: listOperators
+      tags: [operators]
+      summary: List all operators
+      responses:
+        "200":
+          description: List of operators
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Operator"
+    post:
+      operationId: createOperator
+      tags: [operators]
+      summary: Create a new operator
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOperatorBody"
+      responses:
+        "201":
+          description: Created operator
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Operator"
+
+  /operators/{id}:
+    get:
+      operationId: getOperator
+      tags: [operators]
+      summary: Get an operator by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Operator
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Operator"
+    put:
+      operationId: updateOperator
+      tags: [operators]
+      summary: Update an operator
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOperatorBody"
+      responses:
+        "200":
+          description: Updated operator
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Operator"
+    delete:
+      operationId: deleteOperator
+      tags: [operators]
+      summary: Delete an operator
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Products ───────────────────────────────────────────────────────────────
+  /products:
+    get:
+      operationId: listProducts
+      tags: [products]
+      summary: List all products
+      responses:
+        "200":
+          description: List of products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+    post:
+      operationId: createProduct
+      tags: [products]
+      summary: Create a new product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductBody"
+      responses:
+        "201":
+          description: Created product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+
+  /products/{id}/duplicate:
+    post:
+      operationId: duplicateProduct
+      tags: [products]
+      summary: Duplicate a product and all its steps
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "201":
+          description: Duplicated product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+
+  /products/{id}:
+    get:
+      operationId: getProduct
+      tags: [products]
+      summary: Get a product with its steps
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Product with steps
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductWithSteps"
+    put:
+      operationId: updateProduct
+      tags: [products]
+      summary: Update a product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductBody"
+      responses:
+        "200":
+          description: Updated product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+    delete:
+      operationId: deleteProduct
+      tags: [products]
+      summary: Delete a product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Steps ──────────────────────────────────────────────────────────────────
+  /products/{productId}/steps:
+    get:
+      operationId: listSteps
+      tags: [steps]
+      summary: List steps for a product
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Steps list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Step"
+    post:
+      operationId: createStep
+      tags: [steps]
+      summary: Add a step to a product
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStepBody"
+      responses:
+        "201":
+          description: Created step
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Step"
+
+  /products/{productId}/steps/{stepId}:
+    put:
+      operationId: updateStep
+      tags: [steps]
+      summary: Update a step
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: stepId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStepBody"
+      responses:
+        "200":
+          description: Updated step
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Step"
+    delete:
+      operationId: deleteStep
+      tags: [steps]
+      summary: Delete a step
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: stepId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Work Reports ───────────────────────────────────────────────────────────
+  /reports:
+    get:
+      operationId: listReports
+      tags: [reports]
+      summary: List work reports
+      parameters:
+        - name: operatorId
+          in: query
+          schema:
+            type: integer
+        - name: productId
+          in: query
+          schema:
+            type: integer
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: List of work reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkReport"
+    post:
+      operationId: createReport
+      tags: [reports]
+      summary: Submit a work report
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReportBody"
+      responses:
+        "201":
+          description: Created report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkReport"
+
+  /reports/{id}:
+    get:
+      operationId: getReport
+      tags: [reports]
+      summary: Get a report by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Work report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkReport"
+    delete:
+      operationId: deleteReport
+      tags: [reports]
+      summary: Delete a report
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Summary / Dashboard ────────────────────────────────────────────────────
+  /summary/dashboard:
+    get:
+      operationId: getDashboardSummary
+      tags: [summary]
+      summary: Overall dashboard stats
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /summary/operator-stats:
+    get:
+      operationId: getOperatorStats
+      tags: [summary]
+      summary: Per-operator work statistics
+      responses:
+        "200":
+          description: Operator stats list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OperatorStats"
+
+  /summary/product-stats:
+    get:
+      operationId: getProductStats
+      tags: [summary]
+      summary: Per-product report statistics
+      responses:
+        "200":
+          description: Product stats list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductStats"
+
+  # ── Weekly Plans ──────────────────────────────────────────────────────────
+  /weekly-plans:
+    get:
+      operationId: listWeeklyPlans
+      tags: [weeklyPlans]
+      summary: List weekly plans for a week
+      parameters:
+        - name: weekStart
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: ISO date of the Monday (YYYY-MM-DD)
+      responses:
+        "200":
+          description: List of weekly plans with product names
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WeeklyPlan"
+    post:
+      operationId: createWeeklyPlan
+      tags: [weeklyPlans]
+      summary: Create or update a weekly plan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWeeklyPlanBody"
+      responses:
+        "201":
+          description: Created or updated plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WeeklyPlan"
+
+  /weekly-plans/{id}:
+    delete:
+      operationId: deleteWeeklyPlan
+      tags: [weeklyPlans]
+      summary: Delete a weekly plan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /weekly-plans/progress:
+    get:
+      operationId: getWeeklyProgress
+      tags: [weeklyPlans]
+      summary: Get weekly progress for all products
+      parameters:
+        - name: weekStart
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: ISO date of the Monday (YYYY-MM-DD)
+      responses:
+        "200":
+          description: Weekly progress per product
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WeeklyProgress"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+
+    Operator:
+      type: object
+      required: [id, name, employeeId, isAdmin, isLineleader, isModerator, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        employeeId:
+          type: string
+        isAdmin:
+          type: boolean
+        isLineleader:
+          type: boolean
+        isModerator:
+          type: boolean
+        email:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateOperatorBody:
+      type: object
+      required: [name, employeeId]
+      properties:
+        name:
+          type: string
+        employeeId:
+          type: string
+        isAdmin:
+          type: boolean
+        isLineleader:
+          type: boolean
+        isModerator:
+          type: boolean
+        email:
+          type: string
+          nullable: true
+
+    Product:
+      type: object
+      required: [id, name, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        revision:
+          type: string
+          nullable: true
+          maxLength: 10
+        createdAt:
+          type: string
+          format: date-time
+
+    ProductWithSteps:
+      type: object
+      required: [id, name, createdAt, steps]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        revision:
+          type: string
+          nullable: true
+          maxLength: 10
+        createdAt:
+          type: string
+          format: date-time
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/Step"
+
+    CreateProductBody:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        revision:
+          type: string
+          nullable: true
+          maxLength: 10
+
+    Step:
+      type: object
+      required: [id, productId, stepNumber, name, standardTimeMinutes, createdAt]
+      properties:
+        id:
+          type: integer
+        productId:
+          type: integer
+        stepNumber:
+          type: integer
+        subStepLabel:
+          type: string
+          nullable: true
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        standardTimeMinutes:
+          type: number
+
+    CreateStepBody:
+      type: object
+      required: [stepNumber, name, standardTimeMinutes]
+      properties:
+        stepNumber:
+          type: integer
+        subStepLabel:
+          type: string
+          nullable: true
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        standardTimeMinutes:
+          type: number
+
+    WorkReport:
+      type: object
+      required: [id, operatorId, productId, stepId, timeWorkedMinutes, quantityCompleted, reportDate, createdAt]
+      properties:
+        id:
+          type: integer
+        operatorId:
+          type: integer
+        productId:
+          type: integer
+        stepId:
+          type: integer
+        timeWorkedMinutes:
+          type: number
+        quantityCompleted:
+          type: integer
+        operatorCount:
+          type: number
+          nullable: true
+        reportDate:
+          type: string
+          format: date
+        notes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        operator:
+          $ref: "#/components/schemas/Operator"
+        product:
+          $ref: "#/components/schemas/Product"
+        step:
+          $ref: "#/components/schemas/Step"
+
+    CreateReportBody:
+      type: object
+      required: [operatorId, productId, stepId, timeWorkedMinutes, quantityCompleted, reportDate]
+      properties:
+        operatorId:
+          type: integer
+        productId:
+          type: integer
+        stepId:
+          type: integer
+        timeWorkedMinutes:
+          type: number
+        quantityCompleted:
+          type: integer
+        operatorCount:
+          type: number
+          nullable: true
+        reportDate:
+          type: string
+          format: date
+        notes:
+          type: string
+          nullable: true
+
+    DashboardSummary:
+      type: object
+      required: [totalOperators, totalProducts, totalReports, totalQuantityCompleted, totalTimeMinutes, recentReports]
+      properties:
+        totalOperators:
+          type: integer
+        totalProducts:
+          type: integer
+        totalReports:
+          type: integer
+        totalQuantityCompleted:
+          type: integer
+        totalTimeMinutes:
+          type: number
+        recentReports:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkReport"
+
+    OperatorStats:
+      type: object
+      required: [operatorId, operatorName, employeeId, totalReports, totalQuantityCompleted, totalTimeMinutes]
+      properties:
+        operatorId:
+          type: integer
+        operatorName:
+          type: string
+        employeeId:
+          type: string
+        totalReports:
+          type: integer
+        totalQuantityCompleted:
+          type: integer
+        totalTimeMinutes:
+          type: number
+
+    ProductStats:
+      type: object
+      required: [productId, productName, totalReports, totalQuantityCompleted, totalTimeMinutes, stepCount]
+      properties:
+        productId:
+          type: integer
+        productName:
+          type: string
+        totalReports:
+          type: integer
+        totalQuantityCompleted:
+          type: integer
+        totalTimeMinutes:
+          type: number
+        stepCount:
+          type: integer
+
+    WeeklyPlan:
+      type: object
+      required: [id, productId, weekStart, plannedQuantity, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        productId:
+          type: integer
+        weekStart:
+          type: string
+          format: date
+        plannedQuantity:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        product:
+          $ref: "#/components/schemas/Product"
+
+    CreateWeeklyPlanBody:
+      type: object
+      required: [productId, weekStart, plannedQuantity]
+      properties:
+        productId:
+          type: integer
+        weekStart:
+          type: string
+          format: date
+        plannedQuantity:
+          type: integer
+
+    WeeklyProgress:
+      type: object
+      required: [productId, productName, plannedQuantity, completedQuantity, remainingQuantity, percentageComplete]
+      properties:
+        productId:
+          type: integer
+        productName:
+          type: string
+        plannedQuantity:
+          type: integer
+        completedQuantity:
+          type: integer
+        remainingQuantity:
+          type: integer
+        percentageComplete:
+          type: integer
+        planId:
+          type: integer
+          nullable: true
