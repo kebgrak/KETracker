@@ -124,7 +124,7 @@ function EfficiencyBadge({ pct }: { pct: number | null }) {
         <Zap className="w-3 h-3" />{label}
       </span>
     );
-  if (pct >= 80)
+  if (pct >= 90)
     return (
       <span
         data-testid="badge-step-efficiency-mid"
@@ -152,7 +152,7 @@ function EfficiencyBar({ pct }: { pct: number | null }) {
   const color =
     pct >= 100
       ? "bg-emerald-500 dark:bg-emerald-400"
-      : pct >= 80
+      : pct >= 90
       ? "bg-amber-500 dark:bg-amber-400"
       : "bg-red-500 dark:bg-red-400";
   return (
@@ -639,11 +639,11 @@ export default function AdminProductDetail() {
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
-            80–99% — near target
+            90–99% — near target
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
-            &lt; 80% — below target
+            &lt; 90% — below target
           </span>
         </div>
       )}

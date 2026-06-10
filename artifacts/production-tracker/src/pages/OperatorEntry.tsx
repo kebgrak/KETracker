@@ -968,7 +968,7 @@ export default function OperatorEntry() {
                 const effColor =
                   liveEff === null ? "text-muted-foreground" :
                   liveEff >= 100 ? "text-emerald-600" :
-                  liveEff >= 80 ? "text-amber-600" :
+                  liveEff >= 90 ? "text-amber-600" :
                   "text-red-500";
 
                 return (

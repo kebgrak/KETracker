@@ -74,7 +74,7 @@ function EfficiencyBadge({ pct }: { pct: number | null }) {
         {label}
       </span>
     );
-  if (pct >= 80)
+  if (pct >= 90)
     return (
       <span
         data-testid="badge-efficiency-mid"
@@ -611,7 +611,7 @@ export default function AdminDashboard() {
     avgEfficiency !== null
       ? avgEfficiency >= 100
         ? "on or ahead of target"
-        : avgEfficiency >= 80
+        : avgEfficiency >= 90
           ? "near target"
           : "below target"
       : "no data yet";
@@ -766,11 +766,11 @@ export default function AdminDashboard() {
                   </span>
                   <span className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
-                    80–99% near target
+                    90–99% near target
                   </span>
                   <span className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
-                    &lt; 80% below
+                    &lt; 90% below
                   </span>
                 </div>
               </>

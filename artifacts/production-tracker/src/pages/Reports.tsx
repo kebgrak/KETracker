@@ -72,7 +72,7 @@ function EfficiencyBadge({ pct }: { pct: number | null }) {
         {label}
       </span>
     );
-  if (pct >= 80)
+  if (pct >= 90)
     return (
       <span className="inline-flex items-center gap-1 text-xs font-bold font-mono px-2 py-0.5 rounded-sm bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
         {label}
@@ -281,7 +281,7 @@ async function exportToPdf(
         if (op && op.actualMins > 0 && op.expectedMins > 0) {
           const eff = (op.expectedMins / op.actualMins) * 100;
           if (eff >= 100) hookData.cell.styles.textColor = [22, 163, 74];
-          else if (eff >= 80) hookData.cell.styles.textColor = [180, 120, 0];
+          else if (eff >= 90) hookData.cell.styles.textColor = [180, 120, 0];
           else hookData.cell.styles.textColor = [220, 38, 38];
         }
       }
@@ -472,7 +472,7 @@ async function exportToPdf(
           const eff = r ? calcReportEfficiency(r) : null;
           if (eff !== null) {
             if (eff >= 100) data.cell.styles.textColor = [22, 163, 74];
-            else if (eff >= 80) data.cell.styles.textColor = [180, 120, 0];
+            else if (eff >= 90) data.cell.styles.textColor = [180, 120, 0];
             else data.cell.styles.textColor = [220, 38, 38];
           }
         }

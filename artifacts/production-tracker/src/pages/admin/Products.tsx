@@ -70,7 +70,7 @@ function EfficiencyBadge({ pct, label }: { pct: number | null; label: string }) 
         <Zap className="w-2.5 h-2.5" />{label}: {pctStr}
       </span>
     );
-  if (pct >= 80)
+  if (pct >= 90)
     return (
       <span className="inline-flex items-center gap-0.5 text-[10px] font-bold font-mono px-1.5 py-0.5 rounded-sm bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
         {label}: {pctStr}
