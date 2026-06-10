@@ -81,7 +81,7 @@ if (isElectron || isProduction) {
   if (fs.existsSync(frontendDir)) {
     app.use(express.static(frontendDir));
     // SPA fallback — serve index.html for any non-API route
-    app.get("*", (req, res, next) => {
+    app.get("/{*path}", (req, res, next) => {
       if (req.path.startsWith("/api")) return next();
       const indexFile = path.join(frontendDir, "index.html");
       if (fs.existsSync(indexFile)) {
