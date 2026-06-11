@@ -353,62 +353,63 @@ export async function exportStep99Pdf(data: Step99ExportData): Promise<void> {
     margin: { left: 10, right: 10 },
   });
 
-  // ── daily breakdown table ─────────────────────────────────────────────────
+  // ── daily breakdown — one table per product ───────────────────────────────
   if (data.dailyRows.length > 0) {
-    const dailyCursor = (doc as unknown as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? cursor;
-    let dc = dailyCursor + 10;
+    // Group rows by product name, preserving the order from the summary table
+    const productOrder = data.rows
+      .slice()
+      .sort((a, b) => b.entries - a.entries || b.quantityProduced - a.quantityProduced)
+      .map((r) => r.productName);
 
-    if (dc > doc.internal.pageSize.getHeight() - 50) {
-      doc.addPage();
-      dc = 15;
+    const byProduct = new Map<string, typeof data.dailyRows>();
+    for (const r of data.dailyRows) {
+      if (!byProduct.has(r.productName)) byProduct.set(r.productName, []);
+      byProduct.get(r.productName)!.push(r);
     }
+    // Include any product not in summary order at the end
+    const allProducts = [
+      ...productOrder.filter((n) => byProduct.has(n)),
+      ...[...byProduct.keys()].filter((n) => !productOrder.includes(n)),
+    ];
 
-    doc.setFontSize(9);
-    doc.setFont("Roboto", "bold");
-    doc.setTextColor(20, 30, 48);
-    doc.text("Daily Breakdown", 10, dc);
-    dc += 3;
+    let dc = ((doc as unknown as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? cursor) + 10;
 
-    // Build table body — repeat date only on first row of each date group
-    const sorted = data.dailyRows.slice().sort((a, b) =>
-      a.date.localeCompare(b.date) || a.productName.localeCompare(b.productName),
-    );
+    for (const productName of allProducts) {
+      const rows = byProduct.get(productName);
+      if (!rows || rows.length === 0) continue;
 
-    let lastDate = "";
-    const dailyBody = sorted.map((r) => {
-      const dateCell = r.date !== lastDate ? isoToDisplay(r.date) : "";
-      lastDate = r.date;
-      return [dateCell, r.productName, r.quantityProduced, r.operatorCount ?? "—"];
-    });
+      const sorted = rows.slice().sort((a, b) => a.date.localeCompare(b.date));
 
-    // Track which rows start a new date group (for subtle top-border styling)
-    const dateBoundaries = new Set<number>();
-    let prevDate = "";
-    sorted.forEach((r, i) => {
-      if (r.date !== prevDate) { dateBoundaries.add(i); prevDate = r.date; }
-    });
+      if (dc > doc.internal.pageSize.getHeight() - 50) {
+        doc.addPage();
+        dc = 15;
+      }
 
-    autoTable(doc, {
-      startY: dc,
-      head: [["Date", "Product", "Qty Produced", "Operators"]],
-      body: dailyBody,
-      styles: { font: "Roboto", fontSize: 8, cellPadding: 2.5 },
-      headStyles: { fillColor: [40, 60, 90], textColor: [255, 255, 255], font: "Roboto", fontStyle: "bold", fontSize: 7.5 },
-      columnStyles: {
-        0: { cellWidth: 44, fontStyle: "bold", textColor: [40, 60, 90] as [number, number, number] },
-        1: { cellWidth: 90 },
-        2: { halign: "right" },
-        3: { halign: "right" },
-      },
-      alternateRowStyles: { fillColor: [248, 249, 252] },
-      didParseCell(hookData) {
-        if (hookData.section === "body" && dateBoundaries.has(hookData.row.index)) {
-          hookData.cell.styles.lineColor = [180, 190, 210] as [number, number, number];
-          hookData.cell.styles.lineWidth = { top: 0.4, bottom: 0, left: 0, right: 0 };
-        }
-      },
-      margin: { left: 10, right: 10 },
-    });
+      // Product name as section header
+      doc.setFontSize(8.5);
+      doc.setFont("Roboto", "bold");
+      doc.setTextColor(20, 30, 48);
+      doc.text(productName, 10, dc);
+      dc += 3;
+
+      autoTable(doc, {
+        startY: dc,
+        head: [["Date", "Qty Produced", "Operators"]],
+        body: sorted.map((r) => [isoToDisplay(r.date), r.quantityProduced, r.operatorCount ?? "—"]),
+        styles: { font: "Roboto", fontSize: 8, cellPadding: 2.5 },
+        headStyles: { fillColor: [40, 60, 90], textColor: [255, 255, 255], font: "Roboto", fontStyle: "bold", fontSize: 7.5 },
+        columnStyles: {
+          0: { cellWidth: 60 },
+          1: { halign: "right", cellWidth: 32 },
+          2: { halign: "right", cellWidth: 28 },
+        },
+        alternateRowStyles: { fillColor: [248, 249, 252] },
+        margin: { left: 10, right: 10 },
+        tableWidth: 130,
+      });
+
+      dc = ((doc as unknown as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? dc) + 8;
+    }
   }
 
   // ── footer ───────────────────────────────────────────────────────────────────
@@ -493,50 +494,69 @@ export async function exportStep99Xlsx(data: Step99ExportData): Promise<void> {
       row.getCell("team").alignment = { horizontal: "right" };
     });
 
-  // ── Sheet 2: Daily Breakdown ────────────────────────────────────────────────
+  // ── Sheet 2: Daily Breakdown — one block per product ───────────────────────
   if (data.dailyRows.length > 0) {
     const wsDaily = wb.addWorksheet("Daily Breakdown");
     wsDaily.columns = [
-      { header: "Date", key: "date", width: 22 },
-      { header: "Product", key: "product", width: 36 },
-      { header: "Qty Produced", key: "qty", width: 16 },
-      { header: "Operators", key: "operators", width: 14 },
+      { key: "date", width: 24 },
+      { key: "qty", width: 16 },
+      { key: "operators", width: 14 },
     ];
-    styleHeader(wsDaily.getRow(1));
 
-    const sorted = data.dailyRows
+    // Group daily rows by product, same order as summary sheet
+    const productOrder = data.rows
       .slice()
-      .sort((a, b) => a.date.localeCompare(b.date) || a.productName.localeCompare(b.productName));
+      .sort((a, b) => b.entries - a.entries || b.quantityProduced - a.quantityProduced)
+      .map((r) => r.productName);
 
-    let prevDate = "";
-    sorted.forEach((r, i) => {
-      const isNewDate = r.date !== prevDate;
-      prevDate = r.date;
-      const row = wsDaily.addRow({
-        date: isoToDisplay(r.date),
-        product: r.productName,
-        qty: r.quantityProduced,
-        operators: r.operatorCount ?? null,
+    const byProduct = new Map<string, typeof data.dailyRows>();
+    for (const r of data.dailyRows) {
+      if (!byProduct.has(r.productName)) byProduct.set(r.productName, []);
+      byProduct.get(r.productName)!.push(r);
+    }
+    const allProducts = [
+      ...productOrder.filter((n) => byProduct.has(n)),
+      ...[...byProduct.keys()].filter((n) => !productOrder.includes(n)),
+    ];
+
+    let rowIdx = 1;
+    const PRODUCT_FILL: ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF28405A" } };
+    const PRODUCT_FONT: Partial<ExcelJS.Font> = { bold: true, color: { argb: "FFFFFFFF" }, name: "Calibri", size: 10 };
+
+    for (const productName of allProducts) {
+      const rows = byProduct.get(productName);
+      if (!rows || rows.length === 0) continue;
+
+      // Product header row
+      const productRow = wsDaily.getRow(rowIdx++);
+      productRow.values = [productName, "Qty Produced", "Operators"];
+      productRow.eachCell((cell) => {
+        cell.fill = PRODUCT_FILL;
+        cell.font = PRODUCT_FONT;
+        cell.alignment = { vertical: "middle", horizontal: "center" };
+        cell.border = { bottom: { style: "thin", color: { argb: "FF334155" } } };
       });
-      // Alternate row shading
-      if (i % 2 === 1) {
-        row.eachCell((cell) => {
-          if (!cell.fill || (cell.fill as { pattern?: string }).pattern === "none") {
+      productRow.getCell(1).alignment = { vertical: "middle", horizontal: "left" };
+      productRow.height = 20;
+
+      // Data rows sorted by date
+      const sorted = rows.slice().sort((a, b) => a.date.localeCompare(b.date));
+      sorted.forEach((r, i) => {
+        const dataRow = wsDaily.getRow(rowIdx++);
+        dataRow.values = [isoToDisplay(r.date), r.quantityProduced, r.operatorCount ?? null];
+        if (i % 2 === 0) {
+          dataRow.eachCell((cell) => {
             cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8F9FC" } };
-          }
-        });
-      }
-      // Bold date cell and top border on first row of each new date
-      const dateCell = row.getCell("date");
-      dateCell.font = { bold: isNewDate, name: "Calibri", size: 10, color: { argb: "FF28405A" } };
-      if (isNewDate) {
-        row.eachCell((cell) => {
-          cell.border = { top: { style: "thin", color: { argb: "FFB4BECE" } } };
-        });
-      }
-      row.getCell("qty").alignment = { horizontal: "right" };
-      row.getCell("operators").alignment = { horizontal: "right" };
-    });
+          });
+        }
+        dataRow.getCell(1).font = { name: "Calibri", size: 10 };
+        dataRow.getCell(2).alignment = { horizontal: "right" };
+        dataRow.getCell(3).alignment = { horizontal: "right" };
+      });
+
+      // Blank spacer row between products
+      rowIdx++;
+    }
   }
 
   const buffer = await wb.xlsx.writeBuffer();
