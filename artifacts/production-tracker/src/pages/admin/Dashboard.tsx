@@ -7,7 +7,7 @@ import {
   useListOperators,
 } from "@workspace/api-client-react";
 import { calcProductEfficiency, currentWeekStart } from "@/lib/efficiency";
-import { exportDashboardPdf, exportDashboardXlsx } from "@/lib/dashboard-export";
+import { exportDashboardPdf, exportDashboardXlsx, exportStep99Pdf, exportStep99Xlsx } from "@/lib/dashboard-export";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +30,8 @@ import {
   Search,
   X,
   Download,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -466,6 +468,10 @@ export default function AdminDashboard() {
   const [operatorSearch, setOperatorSearch] = useState("");
   const [productSearch, setProductSearch] = useState("");
   const [exporting, setExporting] = useState<"pdf" | "xlsx" | null>(null);
+  const [step99PanelOpen, setStep99PanelOpen] = useState(false);
+  const [step99From, setStep99From] = useState<string>(today);
+  const [step99To, setStep99To] = useState<string>(today);
+  const [step99Exporting, setStep99Exporting] = useState<"pdf" | "xlsx" | null>(null);
 
   const isToday = selectedDate === today;
 
@@ -608,6 +614,45 @@ export default function AdminDashboard() {
     });
   }, [step99Reports, selectedDate, productStats.data]);
 
+  // Step 99 export rows — filtered by the chosen date range
+  const step99ExportRows = useMemo(() => {
+    return (productStats.data ?? []).map((p) => {
+      const reports = step99Reports.filter(
+        (r) =>
+          r.productId === p.productId &&
+          r.reportDate != null &&
+          r.reportDate >= step99From &&
+          r.reportDate <= step99To,
+      );
+      const quantityProduced = reports.reduce((s, r) => s + (r.quantityCompleted ?? 0), 0);
+      const teamSizes = reports
+        .map((r) => (r.operatorCount != null ? Number(r.operatorCount) : null))
+        .filter((v): v is number => v !== null);
+      const avgTeamSize =
+        teamSizes.length > 0 ? teamSizes.reduce((s, v) => s + v, 0) / teamSizes.length : null;
+      const efficiency = calcProductEfficiency(reports, null);
+      return {
+        productName: p.productName,
+        entries: reports.length,
+        quantityProduced,
+        avgTeamSize,
+        efficiency,
+      };
+    });
+  }, [step99Reports, productStats.data, step99From, step99To]);
+
+  async function handleStep99Export(format: "pdf" | "xlsx") {
+    if (step99Exporting) return;
+    setStep99Exporting(format);
+    try {
+      const exportData = { from: step99From, to: step99To, rows: step99ExportRows };
+      if (format === "pdf") await exportStep99Pdf(exportData);
+      else await exportStep99Xlsx(exportData);
+    } finally {
+      setStep99Exporting(null);
+    }
+  }
+
   async function handleExport(format: "pdf" | "xlsx") {
     if (exporting) return;
     setExporting(format);
@@ -664,6 +709,16 @@ export default function AdminDashboard() {
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <Button
+            variant={step99PanelOpen ? "secondary" : "outline"}
+            size="sm"
+            className="h-8 text-xs gap-1.5"
+            onClick={() => setStep99PanelOpen((v) => !v)}
+          >
+            <BarChart2 className="w-3.5 h-3.5" />
+            Step 99 Report
+            {step99PanelOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </Button>
+          <Button
             variant="outline"
             size="sm"
             className="h-8 text-xs gap-1.5"
@@ -685,6 +740,70 @@ export default function AdminDashboard() {
           </Button>
         </div>
       </div>
+
+      {/* Step 99 export panel */}
+      {step99PanelOpen && (
+        <div className="mb-5 rounded-md border border-border bg-muted/30 p-4">
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">From</label>
+              <div className="relative">
+                <input
+                  type="date"
+                  value={step99From}
+                  max={step99To}
+                  onChange={(e) => e.target.value && setStep99From(e.target.value)}
+                  className="h-8 rounded-md border border-input bg-background px-3 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">To</label>
+              <input
+                type="date"
+                value={step99To}
+                min={step99From}
+                max={today}
+                onChange={(e) => e.target.value && setStep99To(e.target.value)}
+                className="h-8 rounded-md border border-input bg-background px-3 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <div className="flex items-center gap-2 pb-0.5">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs gap-1.5"
+                onClick={() => handleStep99Export("xlsx")}
+                disabled={!!step99Exporting || allReports.isLoading || productStats.isLoading}
+              >
+                <Download className="w-3.5 h-3.5" />
+                {step99Exporting === "xlsx" ? "Exporting…" : "Excel"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs gap-1.5"
+                onClick={() => handleStep99Export("pdf")}
+                disabled={!!step99Exporting || allReports.isLoading || productStats.isLoading}
+              >
+                <Download className="w-3.5 h-3.5" />
+                {step99Exporting === "pdf" ? "Exporting…" : "PDF"}
+              </Button>
+            </div>
+            <div className="flex-1 min-w-[200px] pb-0.5">
+              <p className="text-xs text-muted-foreground">
+                {(() => {
+                  const active = step99ExportRows.filter((r) => r.entries > 0);
+                  const total = step99ExportRows.reduce((s, r) => s + r.quantityProduced, 0);
+                  if (allReports.isLoading || productStats.isLoading) return "Loading data…";
+                  if (active.length === 0) return "No step 99 entries in this period.";
+                  return `${active.length} product${active.length !== 1 ? "s" : ""} · ${total} pieces total`;
+                })()}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stat cards */}
       {summary.isLoading ? (
