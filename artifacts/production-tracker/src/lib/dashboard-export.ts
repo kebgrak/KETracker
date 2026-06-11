@@ -224,10 +224,18 @@ export interface Step99ExportRow {
   efficiency: number | null;
 }
 
+export interface Step99DailyRow {
+  date: string;
+  productName: string;
+  quantityProduced: number;
+  operatorCount: number | null;
+}
+
 export interface Step99ExportData {
   from: string;
   to: string;
   rows: Step99ExportRow[];
+  dailyRows: Step99DailyRow[];
 }
 
 export async function exportStep99Pdf(data: Step99ExportData): Promise<void> {
@@ -345,6 +353,64 @@ export async function exportStep99Pdf(data: Step99ExportData): Promise<void> {
     margin: { left: 10, right: 10 },
   });
 
+  // ── daily breakdown table ─────────────────────────────────────────────────
+  if (data.dailyRows.length > 0) {
+    const dailyCursor = (doc as unknown as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? cursor;
+    let dc = dailyCursor + 10;
+
+    if (dc > doc.internal.pageSize.getHeight() - 50) {
+      doc.addPage();
+      dc = 15;
+    }
+
+    doc.setFontSize(9);
+    doc.setFont("Roboto", "bold");
+    doc.setTextColor(20, 30, 48);
+    doc.text("Daily Breakdown", 10, dc);
+    dc += 3;
+
+    // Build table body — repeat date only on first row of each date group
+    const sorted = data.dailyRows.slice().sort((a, b) =>
+      a.date.localeCompare(b.date) || a.productName.localeCompare(b.productName),
+    );
+
+    let lastDate = "";
+    const dailyBody = sorted.map((r) => {
+      const dateCell = r.date !== lastDate ? isoToDisplay(r.date) : "";
+      lastDate = r.date;
+      return [dateCell, r.productName, r.quantityProduced, r.operatorCount ?? "—"];
+    });
+
+    // Track which rows start a new date group (for subtle top-border styling)
+    const dateBoundaries = new Set<number>();
+    let prevDate = "";
+    sorted.forEach((r, i) => {
+      if (r.date !== prevDate) { dateBoundaries.add(i); prevDate = r.date; }
+    });
+
+    autoTable(doc, {
+      startY: dc,
+      head: [["Date", "Product", "Qty Produced", "Operators"]],
+      body: dailyBody,
+      styles: { font: "Roboto", fontSize: 8, cellPadding: 2.5 },
+      headStyles: { fillColor: [40, 60, 90], textColor: [255, 255, 255], font: "Roboto", fontStyle: "bold", fontSize: 7.5 },
+      columnStyles: {
+        0: { cellWidth: 44, fontStyle: "bold", textColor: [40, 60, 90] as [number, number, number] },
+        1: { cellWidth: 90 },
+        2: { halign: "right" },
+        3: { halign: "right" },
+      },
+      alternateRowStyles: { fillColor: [248, 249, 252] },
+      didParseCell(hookData) {
+        if (hookData.section === "body" && dateBoundaries.has(hookData.row.index)) {
+          hookData.cell.styles.lineColor = [180, 190, 210] as [number, number, number];
+          hookData.cell.styles.lineWidth = { top: 0.4, bottom: 0, left: 0, right: 0 };
+        }
+      },
+      margin: { left: 10, right: 10 },
+    });
+  }
+
   // ── footer ───────────────────────────────────────────────────────────────────
   const totalPages = doc.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
@@ -426,6 +492,52 @@ export async function exportStep99Xlsx(data: Step99ExportData): Promise<void> {
       row.getCell("qty").alignment = { horizontal: "right" };
       row.getCell("team").alignment = { horizontal: "right" };
     });
+
+  // ── Sheet 2: Daily Breakdown ────────────────────────────────────────────────
+  if (data.dailyRows.length > 0) {
+    const wsDaily = wb.addWorksheet("Daily Breakdown");
+    wsDaily.columns = [
+      { header: "Date", key: "date", width: 22 },
+      { header: "Product", key: "product", width: 36 },
+      { header: "Qty Produced", key: "qty", width: 16 },
+      { header: "Operators", key: "operators", width: 14 },
+    ];
+    styleHeader(wsDaily.getRow(1));
+
+    const sorted = data.dailyRows
+      .slice()
+      .sort((a, b) => a.date.localeCompare(b.date) || a.productName.localeCompare(b.productName));
+
+    let prevDate = "";
+    sorted.forEach((r, i) => {
+      const isNewDate = r.date !== prevDate;
+      prevDate = r.date;
+      const row = wsDaily.addRow({
+        date: isoToDisplay(r.date),
+        product: r.productName,
+        qty: r.quantityProduced,
+        operators: r.operatorCount ?? null,
+      });
+      // Alternate row shading
+      if (i % 2 === 1) {
+        row.eachCell((cell) => {
+          if (!cell.fill || (cell.fill as { pattern?: string }).pattern === "none") {
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8F9FC" } };
+          }
+        });
+      }
+      // Bold date cell and top border on first row of each new date
+      const dateCell = row.getCell("date");
+      dateCell.font = { bold: isNewDate, name: "Calibri", size: 10, color: { argb: "FF28405A" } };
+      if (isNewDate) {
+        row.eachCell((cell) => {
+          cell.border = { top: { style: "thin", color: { argb: "FFB4BECE" } } };
+        });
+      }
+      row.getCell("qty").alignment = { horizontal: "right" };
+      row.getCell("operators").alignment = { horizontal: "right" };
+    });
+  }
 
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer as ArrayBuffer], {

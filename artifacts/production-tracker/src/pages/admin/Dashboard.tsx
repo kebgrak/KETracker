@@ -628,6 +628,19 @@ export default function AdminDashboard() {
     });
   }, [step99Reports, selectedDate, productStats.data]);
 
+  // Step 99 daily rows — one entry per raw report in the date range
+  const step99DailyRows = useMemo(() => {
+    const inRange = step99Reports.filter(
+      (r) => r.reportDate != null && r.reportDate >= step99From && r.reportDate <= step99To,
+    );
+    return inRange.map((r) => ({
+      date: r.reportDate ?? "",
+      productName: r.product?.name ?? `Product ${r.productId}`,
+      quantityProduced: r.quantityCompleted ?? 0,
+      operatorCount: r.operatorCount != null ? Number(r.operatorCount) : null,
+    }));
+  }, [step99Reports, step99From, step99To]);
+
   // Step 99 export rows — filtered by the chosen date range
   const step99ExportRows = useMemo(() => {
     return (productStats.data ?? []).map((p) => {
@@ -659,7 +672,7 @@ export default function AdminDashboard() {
     if (step99Exporting) return;
     setStep99Exporting(format);
     try {
-      const exportData = { from: step99From, to: step99To, rows: step99ExportRows };
+      const exportData = { from: step99From, to: step99To, rows: step99ExportRows, dailyRows: step99DailyRows };
       if (format === "pdf") await exportStep99Pdf(exportData);
       else await exportStep99Xlsx(exportData);
     } finally {
