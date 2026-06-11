@@ -263,8 +263,7 @@ export async function exportStep99Pdf(data: Step99ExportData): Promise<void> {
 
   doc.setFontSize(8);
   doc.setTextColor(180, 190, 210);
-  doc.text(`Generated: ${now}`, pageW - 10, 10, { align: "right" });
-  doc.text(periodLabel, pageW - 10, 17, { align: "right" });
+  doc.text(`Generated: ${now}`, pageW - 10, 14, { align: "right" });
 
   // ── summary strip ────────────────────────────────────────────────────────────
   const summaryY = 27;
@@ -300,11 +299,16 @@ export async function exportStep99Pdf(data: Step99ExportData): Promise<void> {
 
   let cursor = summaryY + boxH + 8;
 
-  doc.setFontSize(8);
+  doc.setFontSize(9);
   doc.setFont("Roboto", "bold");
   doc.setTextColor(20, 30, 48);
   doc.text("Product Breakdown — Step 99", 10, cursor);
-  cursor += 2;
+  cursor += 5;
+  doc.setFontSize(8);
+  doc.setFont("Roboto", "normal");
+  doc.setTextColor(60, 80, 110);
+  doc.text(`Period: ${periodLabel}`, 10, cursor);
+  cursor += 3;
 
   const tableRows = data.rows
     .slice()
