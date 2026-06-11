@@ -1074,16 +1074,16 @@ export default function Reports() {
                         return (
                           <tr key={row.date} className="border-t border-border hover:bg-muted/30">
                             <td className="px-3 py-2 font-mono text-xs">{row.date}</td>
-                            <td className="px-3 py-2 text-right font-mono text-xs">{row.total}</td>
+                            <td className="px-3 py-2 text-right font-mono text-xs">{Math.round(row.total)}</td>
                             <td className="px-3 py-2 text-right font-mono text-xs text-muted-foreground">{EXPECTED_DAILY_MINUTES}</td>
                             <td className={`px-3 py-2 text-right font-mono text-xs font-bold ${over ? "text-orange-600 dark:text-orange-400" : "text-red-600 dark:text-red-400"}`}>
-                              {sign}{row.delta}
+                              {sign}{Math.round(Math.abs(row.delta))}
                             </td>
                             <td className="px-3 py-2 text-center text-xs text-muted-foreground">{row.count}</td>
                             <td className="px-3 py-2 text-xs">
                               <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm border text-xs ${over ? "bg-orange-50 text-orange-700 border-orange-300 dark:bg-orange-900/30 dark:text-orange-400" : "bg-red-50 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400"}`}>
                                 <AlertTriangle className="w-2.5 h-2.5" />
-                                {over ? `Over by ${row.delta}` : `Under by ${Math.abs(row.delta)}`} min
+                                {over ? `Over by ${Math.round(row.delta)}` : `Under by ${Math.round(Math.abs(row.delta))}`} min
                               </span>
                             </td>
                             <td className="px-3 py-2 text-right">
@@ -1159,7 +1159,7 @@ export default function Reports() {
                     const sign = anomaly.delta > 0 ? "+" : "";
                     return (
                       <span
-                        title={`Day total: ${anomaly.total} min (${sign}${anomaly.delta} vs. expected ${EXPECTED_DAILY_MINUTES})`}
+                        title={`Day total: ${Math.round(anomaly.total)} min (${sign}${Math.round(Math.abs(anomaly.delta))} vs. expected ${EXPECTED_DAILY_MINUTES})`}
                         className={`inline-flex items-center gap-1 text-xs font-mono px-1.5 py-0.5 rounded-sm border ${
                           anomaly.delta > 0
                             ? "bg-orange-50 text-orange-700 border-orange-300 dark:bg-orange-900/30 dark:text-orange-400"
@@ -1167,7 +1167,7 @@ export default function Reports() {
                         }`}
                       >
                         <AlertTriangle className="w-2.5 h-2.5" />
-                        {sign}{anomaly.delta} min/day
+                        {sign}{Math.round(Math.abs(anomaly.delta))} min/day
                       </span>
                     );
                   })()}
