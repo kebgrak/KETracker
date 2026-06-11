@@ -54,6 +54,20 @@ function shiftIso(iso: string, days: number): string {
   return `${yr}-${mn}-${dy}`;
 }
 
+function thisMonthStart(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+function lastMonthRange(): { from: string; to: string } {
+  const d = new Date();
+  const year = d.getMonth() === 0 ? d.getFullYear() - 1 : d.getFullYear();
+  const month = d.getMonth() === 0 ? 12 : d.getMonth();
+  const lastDay = new Date(year, month, 0).getDate();
+  const mm = String(month).padStart(2, "0");
+  return { from: `${year}-${mm}-01`, to: `${year}-${mm}-${String(lastDay).padStart(2, "0")}` };
+}
+
 function formatDateLabel(iso: string): string {
   return new Date(iso + "T00:00:00").toLocaleDateString("en-GB", {
     weekday: "long",
@@ -744,6 +758,45 @@ export default function AdminDashboard() {
       {/* Step 99 export panel */}
       {step99PanelOpen && (
         <div className="mb-5 rounded-md border border-border bg-muted/30 p-4">
+          {/* Quick range presets */}
+          <div className="flex flex-wrap items-center gap-1.5 mb-3">
+            <span className="text-xs text-muted-foreground font-medium mr-1">Quick:</span>
+            {[
+              {
+                label: "Today",
+                apply: () => { setStep99From(today); setStep99To(today); },
+                active: step99From === today && step99To === today,
+              },
+              {
+                label: "This week",
+                apply: () => { const w = currentWeekStart(); setStep99From(w); setStep99To(today); },
+                active: step99From === currentWeekStart() && step99To === today,
+              },
+              {
+                label: "This month",
+                apply: () => { setStep99From(thisMonthStart()); setStep99To(today); },
+                active: step99From === thisMonthStart() && step99To === today,
+              },
+              {
+                label: "Last month",
+                apply: () => { const r = lastMonthRange(); setStep99From(r.from); setStep99To(r.to); },
+                active: (() => { const r = lastMonthRange(); return step99From === r.from && step99To === r.to; })(),
+              },
+            ].map(({ label, apply, active }) => (
+              <button
+                key={label}
+                onClick={apply}
+                className={cn(
+                  "h-6 px-2.5 rounded-sm border text-xs transition-colors",
+                  active
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background border-input text-muted-foreground hover:text-foreground hover:border-foreground/30",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="flex flex-wrap items-end gap-4">
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">From</label>
