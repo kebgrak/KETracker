@@ -73,6 +73,45 @@ publicRouter.post("/reports", async (req, res) => {
   const rd = body.reportDate;
   const reportDate = `${rd.getUTCFullYear()}-${String(rd.getUTCMonth() + 1).padStart(2, "0")}-${String(rd.getUTCDate()).padStart(2, "0")}`;
 
+  // ── Step 99 duplicate guard: one report per product per day ──────────────
+  const [submittedStep] = await db
+    .select({ stepNumber: stepsTable.stepNumber })
+    .from(stepsTable)
+    .where(eq(stepsTable.id, body.stepId))
+    .limit(1);
+
+  if (submittedStep?.stepNumber === 99) {
+    const existing = await db
+      .select({ id: workReportsTable.id })
+      .from(workReportsTable)
+      .innerJoin(stepsTable, eq(workReportsTable.stepId, stepsTable.id))
+      .where(
+        and(
+          eq(workReportsTable.productId, body.productId),
+          eq(workReportsTable.reportDate, reportDate),
+          eq(stepsTable.stepNumber, 99),
+        ),
+      )
+      .limit(1);
+
+    if (existing.length > 0) {
+      const [product] = await db
+        .select({ name: productsTable.name })
+        .from(productsTable)
+        .where(eq(productsTable.id, body.productId))
+        .limit(1);
+
+      const d = new Date(reportDate + "T00:00:00");
+      const displayDate = d.toLocaleDateString("en-GB", {
+        day: "numeric", month: "long", year: "numeric",
+      });
+      res.status(409).json({
+        error: `For ${displayDate} for product "${product?.name ?? String(body.productId)}" a Step 99 report has already been entered`,
+      });
+      return;
+    }
+  }
+
   const [report] = await db.insert(workReportsTable).values({
     operatorId: body.operatorId,
     productId: body.productId,

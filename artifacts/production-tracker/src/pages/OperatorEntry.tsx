@@ -6,6 +6,7 @@ import {
   useListOperators,
   useListProducts,
   useListSteps,
+  useListReports,
   getListStepsQueryKey,
   useCreateReport,
   getListReportsQueryKey,
@@ -253,6 +254,14 @@ export default function OperatorEntry() {
   // Lineleader mode: any lineleader operator
   const isLineleaderMode = !!selectedOperator?.isLineleader;
 
+  // Pre-fetch existing reports for the selected product when in lineleader mode,
+  // so we can catch step-99 duplicates before even hitting the server.
+  const watchedReportDate = form.watch("reportDate");
+  const existingProductReports = useListReports(
+    { productId: selectedProductId! },
+    { query: { enabled: isLineleaderMode && !!selectedProductId } } as Parameters<typeof useListReports>[1],
+  );
+
   // Default time to 450 min when a lineleader is selected; clear it when switching away
   useEffect(() => {
     if (isLineleaderMode) {
@@ -443,6 +452,25 @@ export default function OperatorEntry() {
       reportsToCreate = [{ stepId: selectedStepIds[0], time: totalTime }];
     }
 
+    // ── Step 99 duplicate pre-flight (client-side) ──────────────────────────
+    if (isLineleaderMode && Array.isArray(existingProductReports.data)) {
+      const reportsArr = existingProductReports.data as Array<{ reportDate?: string; step?: { stepNumber?: number } }>;
+      const duplicate = reportsArr.find(
+        (r) => r.reportDate === values.reportDate && r.step?.stepNumber === 99,
+      );
+      if (duplicate) {
+        const d = new Date(values.reportDate + "T00:00:00");
+        const displayDate = d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+        const productName = products.data?.find((p) => String(p.id) === values.productId)?.name ?? values.productId;
+        toast({
+          title: "Duplicate entry",
+          description: `For ${displayDate} for product "${productName}" a Step 99 report has already been entered`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     try {
       await Promise.all(
         reportsToCreate.map(({ stepId, time }) =>
@@ -477,12 +505,22 @@ export default function OperatorEntry() {
         quantityCompleted: "",
         notes: "",
       });
-    } catch {
-      toast({
-        title: "Submission failed",
-        description: "Please try again.",
-        variant: "destructive",
-      });
+    } catch (err) {
+      // Surface the server's 409 duplicate-entry message verbatim
+      const apiErr = err as { status?: number; data?: { error?: string } };
+      if (apiErr?.status === 409 && apiErr?.data?.error) {
+        toast({
+          title: "Duplicate entry",
+          description: apiErr.data.error,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Submission failed",
+          description: "Please try again.",
+          variant: "destructive",
+        });
+      }
     }
   }
 
