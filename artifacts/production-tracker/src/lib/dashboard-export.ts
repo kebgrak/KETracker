@@ -441,8 +441,8 @@ export async function exportStep99Pdf(data: Step99ExportData): Promise<void> {
         body: [["GRAND TOTAL", grandTotalQty, grandAvgOps]],
         styles: {
           font: "Roboto", fontSize: 9, cellPadding: 3,
-          fillColor: [20, 37, 63], textColor: [255, 255, 255],
-          fontStyle: "bold", lineWidth: 0.2, lineColor: [26, 42, 58],
+          fillColor: [235, 240, 248], textColor: [20, 37, 63],
+          fontStyle: "bold", lineWidth: 0.2, lineColor: [143, 163, 186],
         },
         columnStyles: {
           0: { cellWidth: 60, halign: "left" },
