@@ -392,18 +392,25 @@ export async function exportStep99Pdf(data: Step99ExportData): Promise<void> {
       doc.text(productName, 10, dc);
       dc += 3;
 
+      const totalQty = sorted.reduce((s, r) => s + r.quantityProduced, 0);
+      const opVals = sorted.map((r) => r.operatorCount).filter((v): v is number => v !== null);
+      const avgOps = opVals.length > 0 ? (opVals.reduce((s, v) => s + v, 0) / opVals.length).toFixed(1) : "—";
+
       autoTable(doc, {
         startY: dc,
         head: [["Date", "Qty Produced", "Operators"]],
         body: sorted.map((r) => [isoToDisplay(r.date), r.quantityProduced, r.operatorCount ?? "—"]),
+        foot: [[`Total (${sorted.length} entr${sorted.length === 1 ? "y" : "ies"})`, totalQty, `avg ${avgOps}`]],
         styles: { font: "Roboto", fontSize: 8, cellPadding: 2.5 },
         headStyles: { fillColor: [40, 60, 90], textColor: [255, 255, 255], font: "Roboto", fontStyle: "bold", fontSize: 7.5 },
+        footStyles: { fillColor: [235, 240, 248], textColor: [20, 30, 48], font: "Roboto", fontStyle: "bold", fontSize: 8 },
         columnStyles: {
           0: { cellWidth: 60 },
           1: { halign: "right", cellWidth: 32 },
           2: { halign: "right", cellWidth: 28 },
         },
         alternateRowStyles: { fillColor: [248, 249, 252] },
+        showFoot: "lastPage",
         margin: { left: 10, right: 10 },
         tableWidth: 130,
       });
@@ -553,6 +560,29 @@ export async function exportStep99Xlsx(data: Step99ExportData): Promise<void> {
         dataRow.getCell(2).alignment = { horizontal: "right" };
         dataRow.getCell(3).alignment = { horizontal: "right" };
       });
+
+      // Totals row
+      const totalQty = sorted.reduce((s, r) => s + r.quantityProduced, 0);
+      const opVals = sorted.map((r) => r.operatorCount).filter((v): v is number => v !== null);
+      const avgOps = opVals.length > 0
+        ? parseFloat((opVals.reduce((s, v) => s + v, 0) / opVals.length).toFixed(1))
+        : null;
+
+      const totalsRow = wsDaily.getRow(rowIdx++);
+      totalsRow.values = [`Total (${sorted.length} entr${sorted.length === 1 ? "y" : "ies"})`, totalQty, avgOps];
+      totalsRow.eachCell((cell) => {
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEBF0F8" } };
+        cell.font = { bold: true, name: "Calibri", size: 10, color: { argb: "FF14253F" } };
+        cell.border = { top: { style: "thin", color: { argb: "FFB4BECE" } } };
+      });
+      totalsRow.getCell(2).alignment = { horizontal: "right" };
+      totalsRow.getCell(3).alignment = { horizontal: "right" };
+      // Label the avg operators cell so it's clear
+      if (avgOps !== null) {
+        totalsRow.getCell(3).value = `avg ${avgOps.toFixed(1)}`;
+      } else {
+        totalsRow.getCell(3).value = "—";
+      }
 
       // Blank spacer row between products
       rowIdx++;
