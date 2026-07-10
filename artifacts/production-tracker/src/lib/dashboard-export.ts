@@ -144,9 +144,9 @@ export async function exportDashboardPdf(data: DashboardExportData): Promise<voi
       effLabel(p.allTimeEfficiency),
       effLabel(p.weekEfficiency),
     ]),
-    styles: { font: "Roboto", fontSize: 8, cellPadding: 2.5 },
-    headStyles: { fillColor: [20, 30, 48], textColor: [255, 255, 255], font: "Roboto", fontStyle: "bold", fontSize: 7.5 },
-    columnStyles: { 0: { cellWidth: 90 }, 1: { halign: "right" }, 2: { halign: "right" }, 3: { halign: "right" } },
+    styles: { font: "Roboto", fontSize: 8, cellPadding: 2.5, lineWidth: 0.15, lineColor: [208, 216, 228] },
+    headStyles: { fillColor: [20, 30, 48], textColor: [255, 255, 255], font: "Roboto", fontStyle: "bold", fontSize: 7.5, lineWidth: 0.15, lineColor: [26, 42, 58] },
+    columnStyles: { 0: { cellWidth: 90 }, 1: { halign: "center" }, 2: { halign: "center" }, 3: { halign: "center" } },
     alternateRowStyles: { fillColor: [248, 249, 252] },
     didParseCell(data) {
       if (data.section === "body" && (data.column.index === 2 || data.column.index === 3)) {
@@ -183,9 +183,9 @@ export async function exportDashboardPdf(data: DashboardExportData): Promise<voi
       .slice()
       .sort((a, b) => (b.efficiency ?? -1) - (a.efficiency ?? -1))
       .map((op) => [op.operatorName, op.employeeId, op.totalQuantityCompleted, op.totalReports, effLabel(op.efficiency)]),
-    styles: { font: "Roboto", fontSize: 8, cellPadding: 2.5 },
-    headStyles: { fillColor: [20, 30, 48], textColor: [255, 255, 255], font: "Roboto", fontStyle: "bold", fontSize: 7.5 },
-    columnStyles: { 2: { halign: "right" }, 3: { halign: "right" }, 4: { halign: "right" } },
+    styles: { font: "Roboto", fontSize: 8, cellPadding: 2.5, lineWidth: 0.15, lineColor: [208, 216, 228] },
+    headStyles: { fillColor: [20, 30, 48], textColor: [255, 255, 255], font: "Roboto", fontStyle: "bold", fontSize: 7.5, lineWidth: 0.15, lineColor: [26, 42, 58] },
+    columnStyles: { 2: { halign: "center" }, 3: { halign: "center" }, 4: { halign: "center" } },
     alternateRowStyles: { fillColor: [248, 249, 252] },
     didParseCell(data) {
       if (data.section === "body" && data.column.index === 4) {
@@ -333,14 +333,14 @@ export async function exportStep99Pdf(data: Step99ExportData): Promise<void> {
     startY: cursor,
     head: [["Product", "Entries", "Qty Produced", "Avg Team Size", "Efficiency"]],
     body: tableRows,
-    styles: { font: "Roboto", fontSize: 8, cellPadding: 2.5 },
-    headStyles: { fillColor: [20, 30, 48], textColor: [255, 255, 255], font: "Roboto", fontStyle: "bold", fontSize: 7.5 },
+    styles: { font: "Roboto", fontSize: 8, cellPadding: 2.5, lineWidth: 0.15, lineColor: [208, 216, 228] },
+    headStyles: { fillColor: [20, 30, 48], textColor: [255, 255, 255], font: "Roboto", fontStyle: "bold", fontSize: 7.5, lineWidth: 0.15, lineColor: [26, 42, 58] },
     columnStyles: {
       0: { cellWidth: 90 },
-      1: { halign: "right" },
-      2: { halign: "right" },
-      3: { halign: "right" },
-      4: { halign: "right" },
+      1: { halign: "center" },
+      2: { halign: "center" },
+      3: { halign: "center" },
+      4: { halign: "center" },
     },
     alternateRowStyles: { fillColor: [248, 249, 252] },
     didParseCell(hookData) {
@@ -374,6 +374,10 @@ export async function exportStep99Pdf(data: Step99ExportData): Promise<void> {
 
     let dc = ((doc as unknown as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? cursor) + 10;
 
+    // Accumulators for grand-total row
+    let grandTotalQty = 0;
+    const grandOpVals: number[] = [];
+
     for (const productName of allProducts) {
       const rows = byProduct.get(productName);
       if (!rows || rows.length === 0) continue;
@@ -396,18 +400,21 @@ export async function exportStep99Pdf(data: Step99ExportData): Promise<void> {
       const opVals = sorted.map((r) => r.operatorCount).filter((v): v is number => v !== null);
       const avgOps = opVals.length > 0 ? (opVals.reduce((s, v) => s + v, 0) / opVals.length).toFixed(1) : "—";
 
+      grandTotalQty += totalQty;
+      opVals.forEach((v) => grandOpVals.push(v));
+
       autoTable(doc, {
         startY: dc,
         head: [["Date", "Qty Produced", "Operators"]],
         body: sorted.map((r) => [isoToDisplay(r.date), r.quantityProduced, r.operatorCount ?? "—"]),
-        foot: [[`Total (${sorted.length} entr${sorted.length === 1 ? "y" : "ies"})`, totalQty, `avg ${avgOps}`]],
-        styles: { font: "Roboto", fontSize: 8, cellPadding: 2.5 },
-        headStyles: { fillColor: [40, 60, 90], textColor: [255, 255, 255], font: "Roboto", fontStyle: "bold", fontSize: 7.5 },
-        footStyles: { fillColor: [235, 240, 248], textColor: [20, 30, 48], font: "Roboto", fontStyle: "bold", fontSize: 8 },
+        foot: [[`Total (${sorted.length} entr${sorted.length === 1 ? "y" : "ies"})`, totalQty, avgOps === "—" ? "—" : `avg ${avgOps}`]],
+        styles: { font: "Roboto", fontSize: 8, cellPadding: 2.5, lineWidth: 0.15, lineColor: [208, 216, 228] },
+        headStyles: { fillColor: [40, 60, 90], textColor: [255, 255, 255], font: "Roboto", fontStyle: "bold", fontSize: 7.5, lineWidth: 0.15, lineColor: [26, 42, 58] },
+        footStyles: { fillColor: [235, 240, 248], textColor: [20, 30, 48], font: "Roboto", fontStyle: "bold", fontSize: 8, lineWidth: 0.15, lineColor: [180, 162, 186] },
         columnStyles: {
           0: { cellWidth: 60 },
-          1: { halign: "right", cellWidth: 32 },
-          2: { halign: "right", cellWidth: 28 },
+          1: { halign: "center", cellWidth: 32 },
+          2: { halign: "center", cellWidth: 28 },
         },
         alternateRowStyles: { fillColor: [248, 249, 252] },
         showFoot: "lastPage",
@@ -416,6 +423,35 @@ export async function exportStep99Pdf(data: Step99ExportData): Promise<void> {
       });
 
       dc = ((doc as unknown as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? dc) + 8;
+    }
+
+    // ── Grand-total row across all products ──────────────────────────────────
+    if (allProducts.length > 1) {
+      if (dc > doc.internal.pageSize.getHeight() - 30) {
+        doc.addPage();
+        dc = 15;
+      }
+
+      const grandAvgOps = grandOpVals.length > 0
+        ? `avg ${(grandOpVals.reduce((s, v) => s + v, 0) / grandOpVals.length).toFixed(1)}`
+        : "—";
+
+      autoTable(doc, {
+        startY: dc,
+        body: [["GRAND TOTAL", grandTotalQty, grandAvgOps]],
+        styles: {
+          font: "Roboto", fontSize: 9, cellPadding: 3,
+          fillColor: [20, 37, 63], textColor: [255, 255, 255],
+          fontStyle: "bold", lineWidth: 0.2, lineColor: [26, 42, 58],
+        },
+        columnStyles: {
+          0: { cellWidth: 60, halign: "left" },
+          1: { halign: "center", cellWidth: 32 },
+          2: { halign: "center", cellWidth: 28 },
+        },
+        margin: { left: 10, right: 10 },
+        tableWidth: 130,
+      });
     }
   }
 
