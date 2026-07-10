@@ -505,10 +505,30 @@ export async function exportStep99Xlsx(data: Step99ExportData): Promise<void> {
   if (data.dailyRows.length > 0) {
     const wsDaily = wb.addWorksheet("Daily Breakdown");
     wsDaily.columns = [
-      { key: "date", width: 24 },
+      { key: "date", width: 26 },
       { key: "qty", width: 16 },
       { key: "operators", width: 14 },
     ];
+
+    // Thin grid border applied to every data cell
+    const CELL_BORDER: Partial<ExcelJS.Borders> = {
+      top:    { style: "thin", color: { argb: "FFD0D8E4" } },
+      bottom: { style: "thin", color: { argb: "FFD0D8E4" } },
+      left:   { style: "thin", color: { argb: "FFD0D8E4" } },
+      right:  { style: "thin", color: { argb: "FFD0D8E4" } },
+    };
+    const TOTALS_BORDER: Partial<ExcelJS.Borders> = {
+      top:    { style: "medium", color: { argb: "FF8FA3BA" } },
+      bottom: { style: "thin",   color: { argb: "FFD0D8E4" } },
+      left:   { style: "thin",   color: { argb: "FFD0D8E4" } },
+      right:  { style: "thin",   color: { argb: "FFD0D8E4" } },
+    };
+
+    function applyDataCell(cell: ExcelJS.Cell, bold = false) {
+      cell.border = CELL_BORDER;
+      cell.alignment = { vertical: "middle", horizontal: "center" };
+      cell.font = { name: "Calibri", size: 10, bold };
+    }
 
     // Group daily rows by product, same order as summary sheet
     const productOrder = data.rows
@@ -530,6 +550,10 @@ export async function exportStep99Xlsx(data: Step99ExportData): Promise<void> {
     const PRODUCT_FILL: ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF28405A" } };
     const PRODUCT_FONT: Partial<ExcelJS.Font> = { bold: true, color: { argb: "FFFFFFFF" }, name: "Calibri", size: 10 };
 
+    // Accumulators for the grand-total row
+    let grandTotalQty = 0;
+    const grandOpVals: number[] = [];
+
     for (const productName of allProducts) {
       const rows = byProduct.get(productName);
       if (!rows || rows.length === 0) continue;
@@ -541,7 +565,12 @@ export async function exportStep99Xlsx(data: Step99ExportData): Promise<void> {
         cell.fill = PRODUCT_FILL;
         cell.font = PRODUCT_FONT;
         cell.alignment = { vertical: "middle", horizontal: "center" };
-        cell.border = { bottom: { style: "thin", color: { argb: "FF334155" } } };
+        cell.border = {
+          top:    { style: "medium", color: { argb: "FF1A2A3A" } },
+          bottom: { style: "medium", color: { argb: "FF1A2A3A" } },
+          left:   { style: "medium", color: { argb: "FF1A2A3A" } },
+          right:  { style: "medium", color: { argb: "FF1A2A3A" } },
+        };
       });
       productRow.getCell(1).alignment = { vertical: "middle", horizontal: "left" };
       productRow.height = 20;
@@ -550,42 +579,69 @@ export async function exportStep99Xlsx(data: Step99ExportData): Promise<void> {
       const sorted = rows.slice().sort((a, b) => a.date.localeCompare(b.date));
       sorted.forEach((r, i) => {
         const dataRow = wsDaily.getRow(rowIdx++);
-        dataRow.values = [isoToDisplay(r.date), r.quantityProduced, r.operatorCount ?? null];
-        if (i % 2 === 0) {
-          dataRow.eachCell((cell) => {
-            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8F9FC" } };
-          });
+        dataRow.values = [isoToDisplay(r.date), r.quantityProduced, r.operatorCount ?? "—"];
+        const fill: ExcelJS.Fill = i % 2 === 0
+          ? { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8F9FC" } }
+          : { type: "pattern", pattern: "none" };
+        for (let c = 1; c <= 3; c++) {
+          const cell = dataRow.getCell(c);
+          applyDataCell(cell);
+          cell.fill = fill;
         }
-        dataRow.getCell(1).font = { name: "Calibri", size: 10 };
-        dataRow.getCell(2).alignment = { horizontal: "right" };
-        dataRow.getCell(3).alignment = { horizontal: "right" };
+        dataRow.getCell(1).alignment = { vertical: "middle", horizontal: "left" };
       });
 
-      // Totals row
+      // Per-product totals row
       const totalQty = sorted.reduce((s, r) => s + r.quantityProduced, 0);
       const opVals = sorted.map((r) => r.operatorCount).filter((v): v is number => v !== null);
       const avgOps = opVals.length > 0
-        ? parseFloat((opVals.reduce((s, v) => s + v, 0) / opVals.length).toFixed(1))
-        : null;
+        ? (opVals.reduce((s, v) => s + v, 0) / opVals.length).toFixed(1)
+        : "—";
+
+      grandTotalQty += totalQty;
+      opVals.forEach((v) => grandOpVals.push(v));
 
       const totalsRow = wsDaily.getRow(rowIdx++);
-      totalsRow.values = [`Total (${sorted.length} entr${sorted.length === 1 ? "y" : "ies"})`, totalQty, avgOps];
-      totalsRow.eachCell((cell) => {
+      totalsRow.values = [
+        `Total (${sorted.length} entr${sorted.length === 1 ? "y" : "ies"})`,
+        totalQty,
+        avgOps === "—" ? "—" : `avg ${avgOps}`,
+      ];
+      for (let c = 1; c <= 3; c++) {
+        const cell = totalsRow.getCell(c);
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEBF0F8" } };
         cell.font = { bold: true, name: "Calibri", size: 10, color: { argb: "FF14253F" } };
-        cell.border = { top: { style: "thin", color: { argb: "FFB4BECE" } } };
-      });
-      totalsRow.getCell(2).alignment = { horizontal: "right" };
-      totalsRow.getCell(3).alignment = { horizontal: "right" };
-      // Label the avg operators cell so it's clear
-      if (avgOps !== null) {
-        totalsRow.getCell(3).value = `avg ${avgOps.toFixed(1)}`;
-      } else {
-        totalsRow.getCell(3).value = "—";
+        cell.border = TOTALS_BORDER;
+        cell.alignment = { vertical: "middle", horizontal: "center" };
       }
+      totalsRow.getCell(1).alignment = { vertical: "middle", horizontal: "left" };
 
       // Blank spacer row between products
       rowIdx++;
+    }
+
+    // ── Grand-total row ──────────────────────────────────────────────────────
+    if (allProducts.length > 1) {
+      const grandAvgOps = grandOpVals.length > 0
+        ? `avg ${(grandOpVals.reduce((s, v) => s + v, 0) / grandOpVals.length).toFixed(1)}`
+        : "—";
+
+      const grandRow = wsDaily.getRow(rowIdx++);
+      grandRow.values = ["GRAND TOTAL", grandTotalQty, grandAvgOps];
+      grandRow.height = 20;
+      for (let c = 1; c <= 3; c++) {
+        const cell = grandRow.getCell(c);
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF14253F" } };
+        cell.font = { bold: true, name: "Calibri", size: 11, color: { argb: "FFFFFFFF" } };
+        cell.alignment = { vertical: "middle", horizontal: "center" };
+        cell.border = {
+          top:    { style: "medium", color: { argb: "FF1A2A3A" } },
+          bottom: { style: "medium", color: { argb: "FF1A2A3A" } },
+          left:   { style: "medium", color: { argb: "FF1A2A3A" } },
+          right:  { style: "medium", color: { argb: "FF1A2A3A" } },
+        };
+      }
+      grandRow.getCell(1).alignment = { vertical: "middle", horizontal: "left" };
     }
   }
 
