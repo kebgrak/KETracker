@@ -87,8 +87,10 @@ async function verifyAdminPassword(plain: string): Promise<boolean> {
 
 async function verifyModeratorPassword(plain: string): Promise<boolean> {
   const hash = await getStoredHash(MODERATOR_KEY);
-  if (!hash) return false;
-  return bcrypt.compare(plain, hash);
+  if (hash) return bcrypt.compare(plain, hash);
+  // Fall back to env secret (same pattern as admin)
+  const envPassword = process.env["MODERATOR_PASSWORD"];
+  return !!envPassword && plain === envPassword;
 }
 
 // ── Email helper ──────────────────────────────────────────────────────────────
