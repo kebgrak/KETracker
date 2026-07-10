@@ -182,8 +182,10 @@ router.post("/auth/moderator-login", loginLimiter, async (req, res) => {
     return;
   }
 
+  // Must have either a DB hash or an env secret configured
   const hash = await getStoredHash(MODERATOR_KEY);
-  if (!hash) {
+  const envPassword = process.env["MODERATOR_PASSWORD"];
+  if (!hash && !envPassword) {
     res.status(503).json({ error: "Moderator password has not been configured. Please contact an administrator." });
     return;
   }
@@ -279,7 +281,8 @@ router.get("/auth/moderator-password-status", async (req, res) => {
     return;
   }
   const hash = await getStoredHash(MODERATOR_KEY);
-  res.json({ configured: !!hash });
+  const envPassword = process.env["MODERATOR_PASSWORD"];
+  res.json({ configured: !!hash || !!envPassword });
 });
 
 // Reset password — email must match a known admin operator; sets new password and emails all admins
