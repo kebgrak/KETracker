@@ -290,6 +290,109 @@ async function exportToPdf(
 
   let currentY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
 
+  // ── product summary ────────────────────────────────────────────────────────
+  type ProdStat = {
+    name: string;
+    reports: number;
+    units: number;
+    actualMins: number;
+    expectedMins: number;
+  };
+
+  const prodMap = new Map<number, ProdStat>();
+  for (const r of data) {
+    const id = r.productId;
+    if (!prodMap.has(id)) {
+      prodMap.set(id, {
+        name: r.product?.name ?? "Unknown",
+        reports: 0,
+        units: 0,
+        actualMins: 0,
+        expectedMins: 0,
+      });
+    }
+    const stat = prodMap.get(id)!;
+    const qty = r.quantityCompleted ?? 0;
+    const actual = Number(r.timeWorkedMinutes ?? 0);
+    const stdSec = Number(r.step?.standardTimeMinutes ?? 0);
+    const stdMin = stdSec / 60;
+    const ops = r.operatorCount != null ? Number(r.operatorCount) : null;
+    const expectedMins =
+      r.step?.stepNumber === 99 && ops && ops > 0
+        ? (qty / ops) * stdMin
+        : qty * stdMin;
+    stat.reports += 1;
+    stat.units += qty;
+    stat.actualMins += actual;
+    stat.expectedMins += expectedMins;
+  }
+
+  const prodStats = Array.from(prodMap.values()).sort((a, b) => b.units - a.units || a.name.localeCompare(b.name));
+
+  if (prodStats.length > 0) {
+    if (currentY > doc.internal.pageSize.getHeight() - 50) {
+      doc.addPage();
+      currentY = 15;
+    }
+
+    doc.setFontSize(8.5);
+    doc.setFont("Roboto", "bold");
+    doc.setTextColor(20, 30, 48);
+    doc.text("Product Summary", 10, currentY + 1);
+
+    autoTable(doc, {
+      startY: currentY + 5,
+      head: [["Product", "Reports", "Pieces", "Time Worked", "Avg Efficiency"]],
+      body: prodStats.map((p) => {
+        const eff =
+          p.actualMins > 0 && p.expectedMins > 0
+            ? Math.round((p.expectedMins / p.actualMins) * 100)
+            : null;
+        const effLabel = eff !== null ? `${eff}%` : "—";
+        const hours = (p.actualMins / 60).toFixed(1);
+        return [p.name, String(p.reports), String(p.units), `${hours} h`, effLabel];
+      }),
+      columnStyles: {
+        0: { cellWidth: 70 },
+        1: { cellWidth: 20, halign: "center" },
+        2: { cellWidth: 20, halign: "center" },
+        3: { cellWidth: 28, halign: "center" },
+        4: { cellWidth: 30, halign: "center", fontStyle: "bold" },
+      },
+      headStyles: {
+        fillColor: [50, 65, 92],
+        textColor: [255, 255, 255],
+        fontSize: 7.5,
+        fontStyle: "bold",
+        font: "Roboto",
+        cellPadding: { top: 2.5, bottom: 2.5, left: 3, right: 3 },
+      },
+      bodyStyles: {
+        fontSize: 8,
+        textColor: [40, 50, 65],
+        font: "Roboto",
+        cellPadding: { top: 2.5, bottom: 2.5, left: 3, right: 3 },
+      },
+      alternateRowStyles: { fillColor: [250, 251, 254] },
+      margin: { left: 10, right: 10 },
+      tableLineColor: [220, 225, 235],
+      tableLineWidth: 0.2,
+      didParseCell(hookData) {
+        if (hookData.section === "body" && hookData.column.index === 4) {
+          const p = prodStats[hookData.row.index];
+          if (p && p.actualMins > 0 && p.expectedMins > 0) {
+            const eff = (p.expectedMins / p.actualMins) * 100;
+            if (eff >= 100) hookData.cell.styles.textColor = [22, 163, 74];
+            else if (eff >= 90) hookData.cell.styles.textColor = [180, 120, 0];
+            else hookData.cell.styles.textColor = [220, 38, 38];
+          }
+        }
+      },
+    });
+
+    currentY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+  }
+
   // ── daily time summary (only for single-operator exports) ────────────────────
   if (filters.operatorName) {
     const dtMap = new Map<string, { total: number; count: number }>();
