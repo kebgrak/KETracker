@@ -34,6 +34,7 @@ import {
   CalendarRange,
   Zap,
   AlertTriangle,
+  UserCheck,
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
@@ -625,6 +626,18 @@ export default function Reports() {
     return `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, "0")}-${String(last.getDate()).padStart(2, "0")}`;
   });
 
+  // headcount cross-check state
+  const [headcountOpen, setHeadcountOpen] = useState(false);
+  const [headcountFrom, setHeadcountFrom] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+  });
+  const [headcountTo, setHeadcountTo] = useState(() => {
+    const d = new Date();
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    return `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, "0")}-${String(last.getDate()).padStart(2, "0")}`;
+  });
+
   const serverParams: Record<string, string | number> = {};
   if (filterOperatorId) serverParams.operatorId = Number(filterOperatorId);
   if (filterProductId) serverParams.productId = Number(filterProductId);
@@ -638,11 +651,11 @@ export default function Reports() {
     { query: { enabled: anomalyOpen && !!anomalyOpId } } as Parameters<typeof useListReports>[1],
   );
 
-  // All reports (no operator filter) fetched when the anomaly panel is open,
-  // used to pre-compute which operators actually have anomalies in the period.
+  // All reports (no operator filter) fetched when the anomaly panel or headcount
+  // panel is open — shared query so both panels hit the same cache entry.
   const anomalyAllReports = useListReports(
     undefined,
-    { query: { enabled: anomalyOpen } } as Parameters<typeof useListReports>[1],
+    { query: { enabled: anomalyOpen || headcountOpen } } as Parameters<typeof useListReports>[1],
   );
   const productSteps = useListSteps(
     Number(filterProductId),
@@ -742,6 +755,43 @@ export default function Reports() {
       .filter(row => row.delta !== 0)
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [anomalyReports.data, anomalyFrom, anomalyTo]);
+
+  // ── headcount cross-check ─────────────────────────────────────────────────
+  // For each day in the range that has any data, compare:
+  //   actualCount  = distinct operators who submitted ANY report that day
+  //   declaredCount = SUM(operatorCount) from Step 99 reports that day (lineleader declarations)
+  // Flag days where the two numbers differ.
+  const headcountRows = useMemo(() => {
+    const data = anomalyAllReports.data as ReportItem[] | undefined;
+    if (!data) return [];
+
+    // Group all reports by date
+    const byDate = new Map<string, { allOpIds: Set<number>; step99DeclaredTotal: number; step99Products: number }>();
+    for (const r of data) {
+      const date = r.reportDate ?? "";
+      if (!date || date < headcountFrom || date > headcountTo) continue;
+      const entry = byDate.get(date) ?? { allOpIds: new Set<number>(), step99DeclaredTotal: 0, step99Products: 0 };
+      entry.allOpIds.add(r.operatorId);
+      if (r.step?.stepNumber === 99) {
+        entry.step99DeclaredTotal += r.operatorCount != null ? Number(r.operatorCount) : 0;
+        entry.step99Products += 1;
+      }
+      byDate.set(date, entry);
+    }
+
+    // Only surface days that have at least one Step 99 report with an operatorCount declared
+    return Array.from(byDate.entries())
+      .filter(([, e]) => e.step99Products > 0)
+      .map(([date, e]) => ({
+        date,
+        actualCount: e.allOpIds.size,
+        declaredCount: e.step99DeclaredTotal,
+        delta: e.allOpIds.size - e.step99DeclaredTotal,
+        step99Products: e.step99Products,
+      }))
+      .filter((row) => row.delta !== 0)
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [anomalyAllReports.data, headcountFrom, headcountTo]);
 
   function handleDelete(id: number) {
     deleteReport.mutate(
@@ -1199,6 +1249,130 @@ export default function Reports() {
                                   setFilterDateFrom(row.date);
                                   setFilterDateTo(row.date);
                                   setAnomalyOpen(false);
+                                }}
+                              >
+                                View
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Headcount Cross-Check ───────────────────────────────────────────── */}
+      <div className="mb-5 border border-border rounded-sm bg-card">
+        <button
+          className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-foreground hover:bg-muted/40 transition-colors"
+          onClick={() => setHeadcountOpen((v) => !v)}
+        >
+          <span className="flex items-center gap-2">
+            <UserCheck className="w-4 h-4 text-blue-500" />
+            Headcount Cross-Check
+            <span className="text-xs text-muted-foreground font-normal">
+              — compare operators who reported work vs. headcount declared in Step 99
+            </span>
+          </span>
+          {headcountOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+        </button>
+
+        {headcountOpen && (
+          <div className="border-t border-border px-4 py-4 space-y-4">
+            {/* Controls */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Input type="date" className="w-36" value={headcountFrom} onChange={(e) => setHeadcountFrom(e.target.value)} />
+                <span className="text-sm text-muted-foreground">to</span>
+                <Input type="date" className="w-36" value={headcountTo} min={headcountFrom || undefined} onChange={(e) => setHeadcountTo(e.target.value)} />
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const d = new Date();
+                  setHeadcountFrom(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`);
+                  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+                  setHeadcountTo(`${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, "0")}-${String(last.getDate()).padStart(2, "0")}`);
+                }}
+              >
+                This month
+              </Button>
+            </div>
+
+            {/* Legend */}
+            <div className="flex flex-wrap gap-4 text-xs text-muted-foreground border border-border rounded-sm bg-muted/20 px-3 py-2">
+              <span className="flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-primary" />
+                <span className="font-medium text-foreground">Reported</span> — distinct operators who submitted any work report that day
+              </span>
+              <span className="flex items-center gap-1.5">
+                <UserCheck className="w-3.5 h-3.5 text-blue-500" />
+                <span className="font-medium text-foreground">Declared</span> — sum of operator counts entered by line leaders in Step 99 reports across all products
+              </span>
+            </div>
+
+            {/* Results */}
+            {anomalyAllReports.isLoading ? (
+              <div className="space-y-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-8 w-full" />)}</div>
+            ) : headcountRows.length === 0 ? (
+              <p className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                <span>✓</span>
+                No discrepancies — reported operator counts match Step 99 declarations for all days in this period.
+              </p>
+            ) : (
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">
+                  {headcountRows.length} day{headcountRows.length !== 1 ? "s" : ""} with a headcount mismatch:
+                </p>
+                <div className="overflow-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="bg-muted/50 text-muted-foreground text-xs">
+                        <th className="text-left px-3 py-2 font-medium">Date</th>
+                        <th className="text-right px-3 py-2 font-medium">Reported (operators)</th>
+                        <th className="text-right px-3 py-2 font-medium">Declared (Step 99)</th>
+                        <th className="text-right px-3 py-2 font-medium">Δ</th>
+                        <th className="text-center px-3 py-2 font-medium">Products</th>
+                        <th className="text-left px-3 py-2 font-medium">Status</th>
+                        <th className="px-3 py-2" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {headcountRows.map((row) => {
+                        const over = row.delta > 0;
+                        const sign = over ? "+" : "";
+                        return (
+                          <tr key={row.date} className="border-t border-border hover:bg-muted/30">
+                            <td className="px-3 py-2 font-mono text-xs">{row.date}</td>
+                            <td className="px-3 py-2 text-right font-mono text-xs font-semibold text-foreground">{row.actualCount}</td>
+                            <td className="px-3 py-2 text-right font-mono text-xs text-muted-foreground">{row.declaredCount}</td>
+                            <td className={`px-3 py-2 text-right font-mono text-xs font-bold ${over ? "text-orange-600 dark:text-orange-400" : "text-red-600 dark:text-red-400"}`}>
+                              {sign}{row.delta}
+                            </td>
+                            <td className="px-3 py-2 text-center text-xs text-muted-foreground">{row.step99Products}</td>
+                            <td className="px-3 py-2 text-xs">
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm border text-xs ${over ? "bg-orange-50 text-orange-700 border-orange-300 dark:bg-orange-900/30 dark:text-orange-400" : "bg-red-50 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400"}`}>
+                                <AlertTriangle className="w-2.5 h-2.5" />
+                                {over
+                                  ? `${row.delta} more reported than declared`
+                                  : `${Math.abs(row.delta)} fewer reported than declared`}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-xs h-6 px-2"
+                                onClick={() => {
+                                  setFilterDateFrom(row.date);
+                                  setFilterDateTo(row.date);
+                                  setHeadcountOpen(false);
                                 }}
                               >
                                 View
