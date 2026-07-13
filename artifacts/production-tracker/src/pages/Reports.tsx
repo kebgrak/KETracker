@@ -765,14 +765,16 @@ export default function Reports() {
     const data = anomalyAllReports.data as ReportItem[] | undefined;
     if (!data) return [];
 
-    // Group all reports by date
+    // Group all reports by date — exclude lineleaders and step 99 from the "reported" side
     const byDate = new Map<string, { allOpIds: Set<number>; step99DeclaredTotal: number; step99Products: number }>();
     for (const r of data) {
       const date = r.reportDate ?? "";
       if (!date || date < headcountFrom || date > headcountTo) continue;
       const entry = byDate.get(date) ?? { allOpIds: new Set<number>(), step99DeclaredTotal: 0, step99Products: 0 };
-      entry.allOpIds.add(r.operatorId);
-      if (r.step?.stepNumber === 99) {
+      const isLineleader = lineleaderIds.has(r.operatorId);
+      const isStep99 = r.step?.stepNumber === 99;
+      if (!isLineleader && !isStep99) entry.allOpIds.add(r.operatorId);
+      if (isStep99) {
         entry.step99DeclaredTotal += r.operatorCount != null ? Number(r.operatorCount) : 0;
         entry.step99Products += 1;
       }
@@ -791,7 +793,7 @@ export default function Reports() {
       }))
       .filter((row) => row.delta !== 0)
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [anomalyAllReports.data, headcountFrom, headcountTo]);
+  }, [anomalyAllReports.data, headcountFrom, headcountTo, lineleaderIds]);
 
   function handleDelete(id: number) {
     deleteReport.mutate(
