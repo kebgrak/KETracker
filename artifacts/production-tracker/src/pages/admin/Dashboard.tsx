@@ -32,6 +32,9 @@ import {
   Download,
   ChevronDown,
   ChevronUp,
+  UserCheck,
+  AlertTriangle,
+  CheckCircle2,
 } from "lucide-react";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -668,6 +671,17 @@ export default function AdminDashboard() {
     });
   }, [step99Reports, productStats.data, step99From, step99To]);
 
+  // Today's headcount cross-check — shown as a status card on the dashboard
+  const todayHeadcount = useMemo(() => {
+    const allData = allReports.data ?? [];
+    const todayAll = allData.filter((r) => r.reportDate === today);
+    const todayStep99 = todayAll.filter((r) => (r.step?.stepNumber ?? 0) === 99);
+    const actualCount = new Set(todayAll.map((r) => r.operatorId)).size;
+    const declaredCount = todayStep99.reduce((s, r) => s + (r.operatorCount != null ? Number(r.operatorCount) : 0), 0);
+    const hasStep99 = todayStep99.length > 0;
+    return { actualCount, declaredCount, hasStep99, delta: actualCount - declaredCount };
+  }, [allReports.data, today]);
+
   async function handleStep99Export(format: "pdf" | "xlsx") {
     if (step99Exporting) return;
     setStep99Exporting(format);
@@ -894,6 +908,80 @@ export default function AdminDashboard() {
           />
           <StatCard label="Avg Efficiency" value={effLabel} icon={Zap} sub={effSub} trend={effTrend} />
         </div>
+      )}
+
+      {/* Today's headcount cross-check card */}
+      {!allReports.isLoading && (
+        <Card className="mb-5">
+          <CardContent className="pt-4 pb-4">
+            <div className="flex flex-wrap items-center gap-4">
+              {/* Label */}
+              <div className="flex items-center gap-2 min-w-[180px]">
+                <UserCheck className="w-4 h-4 text-primary flex-shrink-0" />
+                <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  Today's Attendance Check
+                </span>
+              </div>
+
+              {/* No data state */}
+              {todayHeadcount.actualCount === 0 && !todayHeadcount.hasStep99 ? (
+                <span className="text-sm text-muted-foreground">No reports submitted yet today.</span>
+              ) : (
+                <>
+                  {/* Reported */}
+                  <div className="flex items-center gap-1.5 text-sm">
+                    <Users className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-muted-foreground text-xs">Reported:</span>
+                    <span className="font-bold font-mono text-foreground">{todayHeadcount.actualCount}</span>
+                  </div>
+
+                  <span className="text-muted-foreground/40 text-sm hidden sm:inline">vs.</span>
+
+                  {/* Declared */}
+                  <div className="flex items-center gap-1.5 text-sm">
+                    <UserCheck className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-muted-foreground text-xs">Declared (Step 99):</span>
+                    {todayHeadcount.hasStep99 ? (
+                      <span className="font-bold font-mono text-foreground">{todayHeadcount.declaredCount}</span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground italic">not submitted yet</span>
+                    )}
+                  </div>
+
+                  {/* Status badge */}
+                  {todayHeadcount.hasStep99 && (
+                    todayHeadcount.delta === 0 ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm border text-xs font-medium bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Headcount match
+                      </span>
+                    ) : (
+                      <span className={cn(
+                        "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm border text-xs font-medium",
+                        todayHeadcount.delta > 0
+                          ? "bg-orange-50 text-orange-700 border-orange-300 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700"
+                          : "bg-red-50 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700"
+                      )}>
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        {todayHeadcount.delta > 0
+                          ? `${todayHeadcount.delta} more reported than declared`
+                          : `${Math.abs(todayHeadcount.delta)} fewer reported than declared`}
+                      </span>
+                    )
+                  )}
+                </>
+              )}
+
+              {/* Link to Reports */}
+              <a
+                href="/admin/reports"
+                className="ml-auto text-xs text-primary hover:underline flex-shrink-0"
+              >
+                View in Reports →
+              </a>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Daily output chart */}
