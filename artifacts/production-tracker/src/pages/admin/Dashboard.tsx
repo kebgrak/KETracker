@@ -1123,8 +1123,6 @@ export default function AdminDashboard() {
             ) : (
               <div className="max-h-[640px] overflow-y-auto space-y-0">
                 {summary.data?.recentReports
-                  .slice()
-                  .reverse()
                   .slice(0, 20)
                   .map((r) => (
                     <div

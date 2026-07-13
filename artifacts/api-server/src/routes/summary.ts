@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, workReportsTable, operatorsTable, productsTable, stepsTable } from "@workspace/db";
-import { and, eq, count, sum, ne } from "drizzle-orm";
+import { and, eq, count, sum, ne, desc } from "drizzle-orm";
 
 const router = Router();
 
@@ -32,9 +32,8 @@ router.get("/summary/dashboard", async (req, res) => {
     .innerJoin(productsTable, eq(workReportsTable.productId, productsTable.id))
     .innerJoin(stepsTable, eq(workReportsTable.stepId, stepsTable.id))
     .where(eq(stepsTable.stepNumber, 99))
-    .orderBy(workReportsTable.createdAt)
-    .limit(10);
-  recentRows.reverse();
+    .orderBy(desc(workReportsTable.createdAt))
+    .limit(20);
 
   const recentReports = recentRows.map(({ report, operator, product, step }) => ({
     ...report,
